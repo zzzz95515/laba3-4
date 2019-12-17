@@ -1,0 +1,58 @@
+import control.matlab as cm
+import numpy as n
+import matplotlib.pyplot as plt
+import sympy as s
+import control as c
+
+W2 = cm.tf([1.], [5., 1.])  # генератор
+W3 = cm.tf([1.0,1.0], [4.0]) # пт
+W4 = cm.tf([22.], [8., 1.]) # усил
+W5 = (W2 * W3 * W4)
+y,x = cm.step(W5)
+
+#print("x=",x)
+#print("y=",y)
+kmax=0
+imax=0
+ust=0.63*y[len(y)-1]
+for i in range (0,len(y)-1):
+    k=(y[i+1]-y[i])/(x[i+1]-x[i])
+    if (y[i]<ust) and (y[i+1]>ust):
+        t=x[i]
+    #print("k=",k)
+    if kmax<k:
+        kmax=k
+        imax=i
+#print(x[imax],"   ",y[imax],"   ",kmax)
+
+a=abs(y[imax]-kmax*x[imax])
+l=a/kmax
+f=kmax*x-a
+
+#plt.plot(x,y)
+#plt.plot (x,f)
+#plt.grid()
+#plt.show()
+#print("a=",a,"l=",l)
+#print(kmax,imax)
+T=t-l
+#print ("T=",T)
+#Kp=0.95/a
+#Ki=1.4*T/Kp
+#Kd=0.47*T/Kp
+Kp=0.6/a
+Ki=l/Kp
+Kd=0.5*l/Kp
+print("Kp=",Kp,"Ki=",Ki,"Kd=",Kd)
+Wp=cm.tf([Kp], [1.])
+Wi=cm.tf([Ki],[1.0, 0])
+Wd=cm.tf([Kd,0], [0.00000001, 1.])
+Wreg=Wp+Wi+Wd
+Weq=W5*Wreg
+W = cm.feedback(Weq,1)
+
+y,x=cm.step(W)
+plt.plot(x,y)
+plt.grid()
+#plt.show()
+
