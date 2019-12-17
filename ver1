@@ -1,0 +1,172 @@
+import control.matlab as cm
+import numpy as n
+import matplotlib.pyplot as plt
+import sympy as s
+import control as c
+
+
+class PID():
+    
+    def __init__(self, p,i,d):
+        self.p=p
+        self.i=i
+        self.d=d
+
+    def peredat(self):
+        Wp=cm.tf([self.p],[1])
+        Wi=cm.tf([self.i],[1,0])
+        Wd=cm.tf([self.d,0],[0.0000001,1])
+        W=Wp+Wd+Wi
+        return W
+    def getP(self):
+        return self.p
+    def getI(self):
+        return self.i
+    def getD(self):
+        return self.d
+"""проверка устойчивости"""
+def Mihaylov(tf):
+    denominator = (tf.den[0])  # знаменатель
+    coefficient = denominator[0]
+    w = s.symbols("w", real=True)
+    polynomial = 0
+    for i in range(0, len(coefficient), 1):
+        polynomial = polynomial + coefficient[i] * (1j * w) ** ((len(coefficient) - i) - 1)
+    polynomial = s.factor(polynomial)
+    #print("Полученный полином:")
+    #print(polynomial)
+    polynomial_real = s.re(polynomial)
+    polynomial_imaginary = s.im(polynomial)
+    x = [polynomial_real.subs({w: m}) for m in n.arange(0, 1, 0.001)]
+    y = [polynomial_imaginary.subs({w: m}) for m in n.arange(0, 1, 0.001)]
+    count_of_quadrants = 1
+    for i in range(1, len(x), 1):
+        if x[i] < 0:
+            if x[i - 1] > 0:
+                count_of_quadrants += 1
+        if x[i] > 0:
+            if x[i - 1] < 0:
+                count_of_quadrants += 1
+        if y[i] < 0:
+            if y[i - 1] > 0:
+                count_of_quadrants += 1
+        if y[i] > 0:
+            if y[i - 1] < 0:
+                count_of_quadrants += 1
+    #print("\n" + "Количество охваченных квадрантов : ")
+    #print(count_of_quadrants)
+    if count_of_quadrants == len(coefficient) - 1:
+        return True
+    else:
+        return False
+
+"корневой метод"
+def Pole(tf):
+    poles = cm.pole(tf)
+   
+    k = 0
+    for i in range(len(poles)):
+        if poles[i].real > 0:
+            k += 1
+            break
+        i += 1
+    if k == 0:
+        return True
+
+    else:
+        False
+
+        
+"""интегральная ошибка"""
+def fitness(W):
+    osh=0
+    flag=Pole(W)
+    #flag=Mihaylov(W)
+    if flag:
+        y,x=cm.step(W)
+        for i in y:
+            osh=osh+(i-1)**2
+    else:
+        osh=10000000000000000
+    return osh
+
+def eqW(W1,W2):
+    W=W1*W2
+    Weq=cm.feedback(W, 1)
+    return Weq
+    
+
+    
+W2 = cm.tf([1.], [5., 1.])  # генератор
+W3 = cm.tf([1.0,1.0], [4.0]) # пт
+W4 = cm.tf([22.], [8., 1.]) # усил
+W5 = (W2 * W3 * W4)
+
+p=0
+i=0
+d=0
+osh=100000000
+osh2=100000000
+osh3=100000000
+st=0
+line_best = []
+while (osh>1.01 and st<1000000):
+    #print (st)
+    pid1=PID(p+1,i,d)
+    pid2=PID(p,i+1,d)
+    pid3=PID(p,i,d+1)
+    Weq1=eqW(W5,pid1.peredat())
+    Weq2=eqW(W5,pid2.peredat())
+    Weq3=eqW(W5,pid3.peredat())
+    osh1=fitness(Weq1)
+    osh2=fitness(Weq2)
+    osh3=fitness(Weq3)
+    osh=min(osh1,osh2,osh3)
+    st=st+1
+    if(osh1==osh):
+        p=pid1.getP()
+        i=pid1.getI()
+        d=pid1.getD()
+    
+    elif(osh2==osh):
+        p=pid2.getP()
+        i=pid2.getI()
+        d=pid2.getD()
+    
+    elif(osh3==osh):
+        p=pid3.getP()
+        i=pid3.getI()
+        d=pid3.getD()
+    pidB=PID(p,i,d)
+    line_best.append(pidB)
+    print(osh,"p=",p,"i=",i,"d=",d)
+
+bestPid=PID(p,i,d)
+W=bestPid.peredat()
+
+Weqbest=eqW(W5,W)
+#print(osh)
+p=bestPid.getP()
+i=bestPid.getI()
+d=bestPid.getD()
+print("p=",p,"i=",i,"d=",d)
+y,x=cm.step(Weqbest)
+plt.plot(x,y)
+plt.grid()
+plt.show()
+x,y,z = [], [], []
+for i in range(len(line_best)):
+    x.append(line_best[i].getP())
+    y.append(line_best[i].getI())
+    z.append(line_best[i].getD())
+
+from mpl_toolkits.mplot3d import Axes3D
+
+fig = plt.figure()
+ax = Axes3D(fig)
+ax.set_xlabel('P')
+ax.set_ylabel('I')
+ax.set_zlabel('D')
+
+ax.scatter(x,y,z)
+plt.show()
